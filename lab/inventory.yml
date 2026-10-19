@@ -1,0 +1,10 @@
+# Inventário do laboratório. Um range expande para pdv-01, pdv-02, pdv-03.
+defaults:
+  user: auditor
+  key_file: keys/fleetwatch
+  become: true
+  timeout: 10
+
+hosts:
+  - name: pdv
+    address: 172.28.0.11-13

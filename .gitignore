@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Laboratório: chaves e resultados gerados localmente
+lab/keys/
+lab/baselines/
+lab/reports/

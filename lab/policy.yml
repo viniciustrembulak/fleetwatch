@@ -1,0 +1,29 @@
+# O que o fleetwatch verifica em cada host.
+
+files:
+  - /etc/passwd
+  - /etc/shadow
+  - /etc/group
+  - /etc/sudoers
+  - /etc/sudoers.d/*
+  - /etc/ssh/sshd_config
+  - /etc/ssh/sshd_config.d/*
+  - /etc/crontab
+  - /etc/cron.d/*
+  - /etc/hosts
+  - /etc/resolv.conf
+  - /etc/ld.so.preload
+  - /etc/profile
+  - /etc/profile.d/*
+  - /etc/systemd/system/*.service
+  - /root/.bashrc
+
+collectors: [files, users, groups, ssh_keys, ports, services, suid]
+
+privileged_groups: [root, sudo, wheel, adm, docker, shadow]
+
+suid_paths: [/]
+
+ignore:
+  # DNS embutido do Docker escuta em 127.0.0.11 numa porta aleatória a cada recriação.
+  addresses: [127.0.0.11]

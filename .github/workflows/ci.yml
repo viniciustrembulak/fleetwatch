@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e '.[dev]'
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: pytest -q
+
+  lab:
+    name: lab (detecção de ponta a ponta)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sobe o laboratório
+        run: make lab-up
+      - name: Baseline
+        run: make baseline
+      - name: Scan sem alterações deve sair com 0
+        run: make scan
+      - name: Simula o ataque
+        run: make attack
+      - name: Scan deve detectar o ataque
+        run: |
+          set +e
+          make scan
+          code=$?
+          set -e
+          test "$code" -ne 0
+          report=$(ls -t lab/reports/*.json | head -1)
+          jq -e '.hosts[] | select(.name=="pdv-01") | .status == "ok"' "$report"
+          jq -e '[.hosts[] | select(.status=="drift") | .name] | sort == ["pdv-02","pdv-03"]' "$report"
+          jq -e '.summary.findings.critical == 2' "$report"
+          jq -e '[.hosts[].findings[] | select(.section=="ports") | .key] | index("tcp/0.0.0.0:4444")' "$report"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: lab/reports/
+      - name: Derruba o laboratório
+        if: always()
+        run: make lab-down

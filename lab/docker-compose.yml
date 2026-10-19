@@ -1,0 +1,44 @@
+# Laboratório: 3 hosts Linux simulando uma frota e o fleetwatch rodando em container.
+name: fleetwatch-lab
+
+x-node: &node
+  build: ./node
+  image: fleetwatch-lab-node
+  volumes:
+    - ./keys/fleetwatch.pub:/keys/fleetwatch.pub:ro
+  restart: unless-stopped
+
+services:
+  pdv-01:
+    <<: *node
+    hostname: pdv-01
+    networks:
+      lab: { ipv4_address: 172.28.0.11 }
+
+  pdv-02:
+    <<: *node
+    hostname: pdv-02
+    networks:
+      lab: { ipv4_address: 172.28.0.12 }
+
+  pdv-03:
+    <<: *node
+    hostname: pdv-03
+    networks:
+      lab: { ipv4_address: 172.28.0.13 }
+
+  fleetwatch:
+    build: ..
+    image: fleetwatch
+    profiles: ["cli"]
+    user: "${FW_UID:-1000}:${FW_GID:-1000}"
+    working_dir: /lab
+    volumes:
+      - ./:/lab
+    networks: [lab]
+
+networks:
+  lab:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fleetwatch · {{ report.generated_at }}</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --fg: #1d2330; --muted: #667085; --border: #e3e6eb;
+    --critical: #b42318; --high: #d92d20; --medium: #b54708; --low: #0e7090; --info: #667085;
+    --ok: #067647; --err: #9e1fae;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11141a; --card: #1a1f27; --fg: #e6e9ef; --muted: #98a2b3; --border: #2a313c;
+      --critical: #f97066; --high: #f97066; --medium: #fdb022; --low: #67e3f9; --info: #98a2b3;
+      --ok: #47cd89; --err: #e478fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 32px 0 12px; }
+  .muted { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 24px; }
+  .tile { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+         letter-spacing: .03em; border: 1px solid currentColor; }
+  .sev.critical { color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, transparent); }
+  .sev.high { color: var(--high); } .sev.medium { color: var(--medium); }
+  .sev.low { color: var(--low); } .sev.info { color: var(--info); }
+  .st-ok { color: var(--ok); } .st-drift { color: var(--high); } .st-error { color: var(--err); }
+  .st-no-baseline { color: var(--medium); }
+  .diff { font-size: 12.5px; }
+  .nowrap { white-space: nowrap; }
+  .diff .b { color: var(--high); } .diff .a { color: var(--ok); }
+  footer { margin-top: 40px; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Relatório de integridade da frota</h1>
+  <div class="muted">Gerado em {{ report.generated_at }} UTC</div>
+
+  <div class="tiles">
+    <div class="tile"><span class="muted">Hosts</span><b>{{ summary.hosts }}</b></div>
+    <div class="tile"><span class="muted">Íntegros</span><b class="st-ok">{{ summary.ok }}</b></div>
+    <div class="tile"><span class="muted">Com desvio</span><b class="st-drift">{{ summary.drift }}</b></div>
+    <div class="tile"><span class="muted">Com erro</span><b class="st-error">{{ summary.error }}</b></div>
+    <div class="tile"><span class="muted">Críticos</span><b class="st-drift">{{ summary.findings.critical }}</b></div>
+  </div>
+
+  <h2>Hosts</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Host</th><th>Endereço</th><th>Sistema</th><th>Status</th><th>Desvios</th></tr></thead>
+      <tbody>
+      {% for h in report.hosts %}
+        <tr>
+          <td><b>{{ h.name }}</b></td>
+          <td><code>{{ h.address }}</code></td>
+          <td class="muted">{{ h.meta.get("os", "") }}{% if h.meta.get("kernel") %} · {{ h.meta.kernel }}{% endif %}</td>
+          <td class="st-{{ h.status }}">{{ h.status }}</td>
+          <td>{% if h.status == "error" %}<span class="muted">{{ h.error }}</span>{% else %}{{ h.findings|length }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% set findings = report.sorted_findings() | rejectattr("section", "equalto", "connectivity") | list %}
+  <h2>Desvios ({{ findings|length }})</h2>
+  {% if findings %}
+  <div class="card">
+    <table>
+      <thead><tr><th>Severidade</th><th>Host</th><th>Tipo</th><th>Item</th><th>Antes → Depois</th></tr></thead>
+      <tbody>
+      {% for f in findings %}
+        <tr>
+          <td class="nowrap"><span class="sev {{ f.severity }}">{{ f.severity|upper }}</span></td>
+          <td class="nowrap">{{ f.host }}</td>
+          <td>{{ f.title }}<div class="muted">{{ change_label.get(f.change, f.change) }}</div></td>
+          <td><code>{{ f.key }}</code>{% if f.detail %}<div class="muted">{{ f.detail }}</div>{% endif %}</td>
+          <td class="diff">
+            {% set pair = f|diff_pair %}
+            {% if pair[0] is not none %}<div class="b">− <code>{{ pair[0] }}</code></div>{% endif %}
+            {% if pair[1] is not none %}<div class="a">+ <code>{{ pair[1] }}</code></div>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum desvio em relação à baseline.</p>
+  {% endif %}
+
+  <footer class="muted">fleetwatch {{ version }}</footer>
+</main>
+</body>
+</html>
